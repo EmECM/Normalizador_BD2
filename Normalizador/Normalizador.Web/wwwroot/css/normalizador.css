@@ -1,0 +1,173 @@
+/* ==========================================================
+   Estilos del front "Normalizador Automatizado"
+   Origen: bloque <style> de Default.aspx (MiPrimerAplicacion)
+   Destino: Normalizador.Web/wwwroot/css/normalizador.css
+   ========================================================== */
+
+body {
+    background-color: #f2f4f7;
+    font-family: Arial, sans-serif;
+}
+
+.contenedor {
+    width: 94%;
+    max-width: 1200px;
+    margin: 25px auto;
+}
+
+.encabezado {
+    background-color: #173f70;
+    color: white;
+    padding: 22px;
+    margin-bottom: 25px;
+    border-radius: 4px;
+}
+
+.encabezado h1 {
+    font-size: 25px;
+    margin: 0;
+}
+
+.encabezado p {
+    margin: 8px 0 0;
+}
+
+.seccion {
+    background: white;
+    padding: 22px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.seccion h2 {
+    color: #173f70;
+    font-size: 20px;
+    margin-top: 0;
+}
+
+.seccion h3 {
+    color: #173f70;
+    font-size: 17px;
+    margin-top: 20px;
+}
+
+.boton {
+    background-color: #198754;
+    color: white;
+    border: none;
+    padding: 11px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+
+.boton:hover {
+    background-color: #146c43;
+}
+
+.resumen {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.dato {
+    background-color: #edf3f8;
+    border: 1px solid #d5e0e9;
+    padding: 15px;
+    flex: 1;
+    min-width: 150px;
+}
+
+.dato strong {
+    display: block;
+    font-size: 24px;
+    color: #173f70;
+    margin-top: 8px;
+}
+
+.tabla {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background: white;
+}
+
+.tabla th {
+    background-color: #e5ebf1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    text-align: left;
+}
+
+.tabla td {
+    padding: 9px;
+    border: 1px solid #ccc;
+}
+
+.mensaje {
+    padding: 12px;
+    margin-bottom: 15px;
+    background-color: #edf3f8;
+    border: 1px solid #d5e0e9;
+    border-radius: 4px;
+}
+
+.pie {
+    text-align: center;
+    color: #777;
+    padding: 20px;
+}
+
+/* ---------- Clases nuevas (no existían en el front original) ---------- */
+
+/* Variantes del mensaje */
+.mensaje.ok {
+    background-color: #d4edda;
+    border-color: #b7dfc1;
+    color: #14532d;
+}
+
+.mensaje.error {
+    background-color: #f8d7da;
+    border-color: #f1b0b7;
+    color: #842029;
+}
+
+.mensaje ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+/* Filas del informe de prerrequisitos (reemplazan los style="background:..." en línea) */
+.tabla tr.fila-cumple td {
+    background-color: #d4edda;
+}
+
+.tabla tr.fila-advertencia td {
+    background-color: #fff3cd;
+}
+
+.tabla tr.fila-nocumple td {
+    background-color: #f8d7da;
+}
+
+/* Envoltura para que las tablas anchas se desplacen sin romper la página */
+.tabla-contenedor {
+    overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+    .resumen {
+        display: block;
+    }
+
+    .dato {
+        margin-bottom: 10px;
+    }
+
+    .seccion {
+        overflow-x: auto;
+    }
+}

@@ -1,0 +1,209 @@
+@page "/"
+@using Normalizador.Core.Modelos
+@model Normalizador.Web.Pages.AnalizarModel
+@{
+    ViewData["Title"] = "Normalizador Automatizado";
+}
+
+<div class="contenedor">
+
+    <div class="encabezado">
+        <h1>DB ADMIN II - NORMALIZACIÓN AUTOMATIZADA</h1>
+        <p>Proyecto 1 | Análisis y normalización de bases de datos</p>
+    </div>
+
+    <!-- 1. Entrada de datos -->
+    <div class="seccion">
+        <h2>1. Entrada de datos</h2>
+
+        <p>
+            Carga un archivo SQL para analizar y normalizar
+            las tablas de tu base de datos.
+        </p>
+
+        <div class="mensaje @(Model.ConexionOk ? "ok" : "error")">
+            Conexión a SQL Server: @Model.EstadoConexion
+        </div>
+
+        <p>Seleccione el archivo SQL de su base de datos:</p>
+
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" asp-for="ArchivoSql" accept=".sql" />
+            <br />
+            <button type="submit" class="boton">Analizar estructura y evaluar prerrequisitos</button>
+        </form>
+    </div>
+
+    @if (Model.MensajeError != null)
+    {
+        <div class="seccion">
+            <div class="mensaje error">@Model.MensajeError</div>
+        </div>
+    }
+
+    @if (Model.Resultado != null)
+    {
+        if (!Model.Resultado.ScriptValido)
+        {
+            <div class="seccion">
+                <h2>Errores en el script</h2>
+                <div class="mensaje error">
+                    <ul>
+                        @foreach (var error in Model.Resultado.Errores)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+        else
+        {
+            var totalColumnas = Model.Resultado.Tablas.Sum(t => t.Columnas.Count);
+            var totalRelaciones = Model.Resultado.Tablas.Sum(t => t.ClavesForaneas.Count);
+
+            <!-- 2. Resumen de la lectura -->
+            <div class="seccion">
+                <h2>2. Resumen de la lectura</h2>
+
+                <div class="mensaje ok">Archivo analizado correctamente.</div>
+
+                <div class="resumen">
+                    <div class="dato">
+                        Tablas encontradas
+                        <strong>@Model.Resultado.Tablas.Count</strong>
+                    </div>
+                    <div class="dato">
+                        Columnas identificadas
+                        <strong>@totalColumnas</strong>
+                    </div>
+                    <div class="dato">
+                        Relaciones encontradas
+                        <strong>@totalRelaciones</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Tablas originales -->
+            <div class="seccion">
+                <h2>3. Tablas originales</h2>
+
+                @foreach (var tabla in Model.Resultado.Tablas)
+                {
+                    <h3>@($"{tabla.Esquema}.{tabla.Nombre}")</h3>
+
+                    <div class="tabla-contenedor">
+                        <table class="tabla">
+                            <thead>
+                                <tr>
+                                    <th>Columna</th>
+                                    <th>Tipo</th>
+                                    <th>PK</th>
+                                    <th>Único</th>
+                                    <th>Acepta nulos</th>
+                                    <th>Identity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in tabla.Columnas)
+                                {
+                                    <tr>
+                                        <td>@c.Nombre</td>
+                                        <td>@c.TipoDato</td>
+                                        <td>@(c.EsPrimaryKey ? "Sí" : "")</td>
+                                        <td>@(c.EsUnica ? "Sí" : "")</td>
+                                        <td>@(c.PermiteNulos ? "Sí" : "No")</td>
+                                        <td>@(c.EsIdentity ? "Sí" : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p>
+                        <strong>Clave primaria:</strong>
+                        @string.Join(", ", tabla.ClavePrimaria.Select(c => c.Nombre))
+                    </p>
+
+                    @if (tabla.ClavesForaneas.Count > 0)
+                    {
+                        <p>
+                            <strong>Claves foráneas:</strong>
+                            @string.Join("; ", tabla.ClavesForaneas.Select(fk =>
+                                $"({string.Join(", ", fk.Columnas)}) → {fk.TablaReferenciada}({string.Join(", ", fk.ColumnasReferenciadas)})"))
+                        </p>
+                    }
+                }
+            </div>
+
+            <!-- 4. Informe de prerrequisitos -->
+            <div class="seccion">
+                <h2>4. Informe de prerrequisitos</h2>
+
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <thead>
+                            <tr>
+                                <th>Tabla</th>
+                                <th>Regla</th>
+                                <th>Estado</th>
+                                <th>Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Model.Resultado.Resultados)
+                            {
+                                var clase = r.Estado switch
+                                {
+                                    EstadoRegla.Cumple => "fila-cumple",
+                                    EstadoRegla.Advertencia => "fila-advertencia",
+                                    _ => "fila-nocumple"
+                                };
+                                <tr class="@clase">
+                                    <td>@r.Tabla</td>
+                                    <td>@r.Regla</td>
+                                    <td>@r.Estado</td>
+                                    <td>@r.Detalle</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (Model.Resultado.PuedeContinuar)
+                {
+                    <div class="mensaje ok" style="margin-top:15px;">
+                        Los prerrequisitos se cumplen: se puede continuar con la revisión de formas normales.
+                    </div>
+                }
+                else
+                {
+                    <div class="mensaje error" style="margin-top:15px;">
+                        Hay prerrequisitos que no se cumplen: corrige las filas en rojo antes de continuar.
+                    </div>
+                }
+            </div>
+
+            <!-- 5. Análisis de normalización (pendiente de conectar con la lógica de 1FN, 2FN y 3FN) -->
+            <div class="seccion">
+                <h2>5. Análisis de normalización</h2>
+
+                <div class="mensaje">
+                    <strong>Primera Forma Normal (1FN)</strong><br />
+                    Se deben verificar los valores atómicos de las columnas.<br /><br />
+                    <strong>Segunda Forma Normal (2FN)</strong><br />
+                    Se deben verificar las dependencias completas de las claves.<br /><br />
+                    <strong>Tercera Forma Normal (3FN)</strong><br />
+                    Se deben verificar las dependencias transitivas.<br /><br />
+                    <strong>Nota:</strong> Para certificar las formas normales es necesario analizar
+                    también las dependencias funcionales y los datos.
+                </div>
+            </div>
+        }
+    }
+
+    <div class="pie">
+    Administración de Base de Datos II
+    </div>
+
+</div>
