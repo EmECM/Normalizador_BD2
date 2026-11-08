@@ -103,29 +103,38 @@ public class ReglaClavesForaneas : IReglaTabla
         var problemas = new List<string>();
 
         foreach (var fk in tabla.ClavesForaneas)
-        {
-            var destino = todas.FirstOrDefault(
-                t => t.Nombre.Equals(fk.TablaReferenciada, StringComparison.OrdinalIgnoreCase));
-
-            if (destino == null)
-            {
-                problemas.Add($"La tabla referenciada '{fk.TablaReferenciada}' no existe en el script.");
-                continue;
-            }
-
-            foreach (var nombre in fk.ColumnasReferenciadas)
-                if (!destino.Columnas.Any(c => c.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase)))
-                    problemas.Add($"La columna '{nombre}' no existe en '{destino.Nombre}'.");
-
-            foreach (var nombre in fk.Columnas)
-                if (!tabla.Columnas.Any(c => c.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase)))
-                    problemas.Add($"La columna '{nombre}' no existe en '{tabla.Nombre}'.");
-        }
+            problemas.AddRange(Validar(tabla, fk, todas));
 
         if (problemas.Count > 0)
             return ResultadoRegla.De(tabla, Nombre, EstadoRegla.NoCumple, string.Join(" ", problemas));
 
         return ResultadoRegla.De(tabla, Nombre, EstadoRegla.Cumple,
             $"{tabla.ClavesForaneas.Count} clave(s) foránea(s) correcta(s).");
+    }
+
+    // Problemas de una clave foránea concreta (lista vacía = válida).
+    // También la usa el corrector automático para decidir qué claves quitar.
+    public static List<string> Validar(Tabla tabla, ClaveForanea fk, IReadOnlyList<Tabla> todas)
+    {
+        var problemas = new List<string>();
+
+        var destino = todas.FirstOrDefault(
+            t => t.Nombre.Equals(fk.TablaReferenciada, StringComparison.OrdinalIgnoreCase));
+
+        if (destino == null)
+        {
+            problemas.Add($"La tabla referenciada '{fk.TablaReferenciada}' no existe en el script.");
+            return problemas;
+        }
+
+        foreach (var nombre in fk.ColumnasReferenciadas)
+            if (!destino.Columnas.Any(c => c.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase)))
+                problemas.Add($"La columna '{nombre}' no existe en '{destino.Nombre}'.");
+
+        foreach (var nombre in fk.Columnas)
+            if (!tabla.Columnas.Any(c => c.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase)))
+                problemas.Add($"La columna '{nombre}' no existe en '{tabla.Nombre}'.");
+
+        return problemas;
     }
 }

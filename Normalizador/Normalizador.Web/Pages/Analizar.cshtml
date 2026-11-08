@@ -140,40 +140,18 @@
             <div class="seccion">
                 <h2>4. Informe de prerrequisitos</h2>
 
-                <div class="tabla-contenedor">
-                    <table class="tabla">
-                        <thead>
-                            <tr>
-                                <th>Tabla</th>
-                                <th>Regla</th>
-                                <th>Estado</th>
-                                <th>Detalle</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var r in Model.Resultado.Resultados)
-                            {
-                                var clase = r.Estado switch
-                                {
-                                    EstadoRegla.Cumple => "fila-cumple",
-                                    EstadoRegla.Advertencia => "fila-advertencia",
-                                    _ => "fila-nocumple"
-                                };
-                                <tr class="@clase">
-                                    <td>@r.Tabla</td>
-                                    <td>@r.Regla</td>
-                                    <td>@r.Estado</td>
-                                    <td>@r.Detalle</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <partial name="_TablaInforme" model="Model.Resultado.Resultados" />
 
                 @if (Model.Resultado.PuedeContinuar)
                 {
                     <div class="mensaje ok" style="margin-top:15px;">
                         Los prerrequisitos se cumplen: se puede continuar con la revisión de formas normales.
+                    </div>
+                }
+                else if (Model.Correccion != null)
+                {
+                    <div class="mensaje error" style="margin-top:15px;">
+                        Hay prerrequisitos que no se cumplen. El sistema corrigió el script automáticamente: revisa la sección 5.
                     </div>
                 }
                 else
@@ -184,9 +162,77 @@
                 }
             </div>
 
-            <!-- 5. Análisis de normalización (pendiente de conectar con la lógica de 1FN, 2FN y 3FN) -->
+            if (Model.Correccion != null)
+            {
+                <!-- 5. Corrección automática de prerrequisitos -->
+                <div class="seccion">
+                    <h2>5. Corrección automática de prerrequisitos</h2>
+
+                    @if (Model.Correccion.HuboCambios)
+                    {
+                        <div class="mensaje ok">
+                            Se aplicaron @Model.Correccion.Cambios.Count modificación(es) al script para que cumpla los prerrequisitos.
+                        </div>
+
+                        <h3>Cambios realizados</h3>
+                        <div class="tabla-contenedor">
+                            <table class="tabla">
+                                <thead>
+                                    <tr>
+                                        <th>Tabla</th>
+                                        <th>Prerrequisito</th>
+                                        <th>Modificación</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var cambio in Model.Correccion.Cambios)
+                                    {
+                                        <tr>
+                                            <td>@cambio.Tabla</td>
+                                            <td>@cambio.Regla</td>
+                                            <td>@cambio.Descripcion</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3>Script corregido</h3>
+                        <a class="boton boton-enlace" download="script_corregido.sql"
+                           href="data:text/plain;charset=utf-8,@(Uri.EscapeDataString(Model.Correccion.ScriptCorregido))">Descargar script corregido</a>
+                        <pre class="codigo">@Model.Correccion.ScriptCorregido</pre>
+
+                        <h3>Informe de prerrequisitos después de la corrección</h3>
+                        @if (Model.Correccion.AnalisisCorregido != null)
+                        {
+                            <partial name="_TablaInforme" model="Model.Correccion.AnalisisCorregido.Resultados" />
+
+                            if (Model.Correccion.AnalisisCorregido.PuedeContinuar)
+                            {
+                                <div class="mensaje ok" style="margin-top:15px;">
+                                    El script corregido cumple los prerrequisitos: se puede continuar con la revisión de formas normales.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="mensaje error" style="margin-top:15px;">
+                                    Aún quedan prerrequisitos sin cumplir que no se pudieron corregir automáticamente.
+                                </div>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <div class="mensaje error">
+                            No se encontró una corrección automática para los prerrequisitos que fallan.
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- 6. Análisis de normalización (pendiente de conectar con la lógica de 1FN, 2FN y 3FN) -->
             <div class="seccion">
-                <h2>5. Análisis de normalización</h2>
+                <h2>6. Análisis de normalización</h2>
 
                 <div class="mensaje">
                     <strong>Primera Forma Normal (1FN)</strong><br />

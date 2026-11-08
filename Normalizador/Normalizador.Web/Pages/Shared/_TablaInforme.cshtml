@@ -1,0 +1,32 @@
+@using Normalizador.Core.Modelos
+@model IEnumerable<ResultadoRegla>
+
+<div class="tabla-contenedor">
+    <table class="tabla">
+        <thead>
+            <tr>
+                <th>Tabla</th>
+                <th>Regla</th>
+                <th>Estado</th>
+                <th>Detalle</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Model)
+            {
+                var clase = r.Estado switch
+                {
+                    EstadoRegla.Cumple => "fila-cumple",
+                    EstadoRegla.Advertencia => "fila-advertencia",
+                    _ => "fila-nocumple"
+                };
+                <tr class="@clase">
+                    <td>@r.Tabla</td>
+                    <td>@r.Regla</td>
+                    <td>@r.Estado</td>
+                    <td>@r.Detalle</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

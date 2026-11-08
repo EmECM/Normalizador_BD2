@@ -10,6 +10,10 @@ public class LectorSql
     private static readonly Regex SeparadorGo =
         new(@"^[ \t]*GO[ \t]*(?:--.*)?\r?$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
+    // Lotes no vacíos del script, sin las líneas "GO"
+    public static IReadOnlyList<string> DividirLotes(string script) =>
+        SeparadorGo.Split(script).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+
     public (List<Tabla> Tablas, List<string> Errores) Leer(string script)
     {
         var errores = new List<string>();

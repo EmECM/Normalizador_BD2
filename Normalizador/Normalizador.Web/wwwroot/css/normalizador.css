@@ -153,6 +153,25 @@ body {
     background-color: #f8d7da;
 }
 
+/* Script SQL corregido */
+.codigo {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    padding: 15px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre;
+}
+
+.boton-enlace {
+    display: inline-block;
+    text-decoration: none;
+    margin-bottom: 10px;
+}
+
 /* Envoltura para que las tablas anchas se desplacen sin romper la página */
 .tabla-contenedor {
     overflow-x: auto;
