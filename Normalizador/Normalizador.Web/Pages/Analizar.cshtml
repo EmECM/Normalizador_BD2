@@ -88,52 +88,7 @@
             <div class="seccion">
                 <h2>3. Tablas originales</h2>
 
-                @foreach (var tabla in Model.Resultado.Tablas)
-                {
-                    <h3>@($"{tabla.Esquema}.{tabla.Nombre}")</h3>
-
-                    <div class="tabla-contenedor">
-                        <table class="tabla">
-                            <thead>
-                                <tr>
-                                    <th>Columna</th>
-                                    <th>Tipo</th>
-                                    <th>PK</th>
-                                    <th>Único</th>
-                                    <th>Acepta nulos</th>
-                                    <th>Identity</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var c in tabla.Columnas)
-                                {
-                                    <tr>
-                                        <td>@c.Nombre</td>
-                                        <td>@c.TipoDato</td>
-                                        <td>@(c.EsPrimaryKey ? "Sí" : "")</td>
-                                        <td>@(c.EsUnica ? "Sí" : "")</td>
-                                        <td>@(c.PermiteNulos ? "Sí" : "No")</td>
-                                        <td>@(c.EsIdentity ? "Sí" : "")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <p>
-                        <strong>Clave primaria:</strong>
-                        @string.Join(", ", tabla.ClavePrimaria.Select(c => c.Nombre))
-                    </p>
-
-                    @if (tabla.ClavesForaneas.Count > 0)
-                    {
-                        <p>
-                            <strong>Claves foráneas:</strong>
-                            @string.Join("; ", tabla.ClavesForaneas.Select(fk =>
-                                $"({string.Join(", ", fk.Columnas)}) → {fk.TablaReferenciada}({string.Join(", ", fk.ColumnasReferenciadas)})"))
-                        </p>
-                    }
-                }
+                <partial name="_ListadoTablas" model="Model.Resultado.Tablas" />
             </div>
 
             <!-- 4. Informe de prerrequisitos -->
@@ -197,20 +152,18 @@
                             </table>
                         </div>
 
-                        <h3>Script corregido</h3>
-                        <a class="boton boton-enlace" download="script_corregido.sql"
-                           href="data:text/plain;charset=utf-8,@(Uri.EscapeDataString(Model.Correccion.ScriptCorregido))">Descargar script corregido</a>
-                        <pre class="codigo">@Model.Correccion.ScriptCorregido</pre>
-
-                        <h3>Informe de prerrequisitos después de la corrección</h3>
                         @if (Model.Correccion.AnalisisCorregido != null)
                         {
+                            <h3>Tablas corregidas</h3>
+                            <partial name="_ListadoTablas" model="Model.Correccion.AnalisisCorregido.Tablas" />
+
+                            <h3>Informe de prerrequisitos después de la corrección</h3>
                             <partial name="_TablaInforme" model="Model.Correccion.AnalisisCorregido.Resultados" />
 
                             if (Model.Correccion.AnalisisCorregido.PuedeContinuar)
                             {
                                 <div class="mensaje ok" style="margin-top:15px;">
-                                    El script corregido cumple los prerrequisitos: se puede continuar con la revisión de formas normales.
+                                    Las tablas corregidas cumplen los prerrequisitos: se puede continuar con la revisión de formas normales.
                                 </div>
                             }
                             else
