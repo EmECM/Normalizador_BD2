@@ -12,18 +12,35 @@
                     <th>Columna</th>
                     <th>Tipo</th>
                     <th>PK</th>
+                    <th>FK</th>
                     <th>Único</th>
                     <th>Acepta nulos</th>
                     <th>Identity</th>
                 </tr>
             </thead>
             <tbody>
+                @{
+                    var esPkCompuesta = tabla.ClavePrimaria.Count > 1;
+                }
                 @foreach (var c in tabla.Columnas)
                 {
+                    var fk = tabla.ClavesForaneas.FirstOrDefault(f =>
+                        f.Columnas.Any(col => col.Equals(c.Nombre, StringComparison.OrdinalIgnoreCase)));
+                    var textoFk = "";
+                    if (fk != null)
+                    {
+                        var idx = fk.Columnas.FindIndex(col => col.Equals(c.Nombre, StringComparison.OrdinalIgnoreCase));
+                        var colRef = idx >= 0 && idx < fk.ColumnasReferenciadas.Count
+                            ? fk.ColumnasReferenciadas[idx]
+                            : string.Join(", ", fk.ColumnasReferenciadas);
+                        textoFk = $"Sí → {fk.TablaReferenciada}({colRef})";
+                    }
+                    var textoPk = !c.EsPrimaryKey ? "" : (esPkCompuesta ? "Sí (Compuesta)" : "Sí");
                     <tr>
                         <td>@c.Nombre</td>
                         <td>@c.TipoDato</td>
-                        <td>@(c.EsPrimaryKey ? "Sí" : "")</td>
+                        <td>@textoPk</td>
+                        <td>@textoFk</td>
                         <td>@(c.EsUnica ? "Sí" : "")</td>
                         <td>@(c.PermiteNulos ? "Sí" : "No")</td>
                         <td>@(c.EsIdentity ? "Sí" : "")</td>
@@ -34,7 +51,7 @@
     </div>
 
     <p>
-        <strong>Clave primaria:</strong>
+        <strong>@(esPkCompuesta ? "Clave primaria compuesta:" : "Clave primaria:")</strong>
         @string.Join(", ", tabla.ClavePrimaria.Select(c => c.Nombre))
     </p>
 
@@ -49,7 +66,7 @@
 
     var primerosDiez = tabla.Filas.Take(10).ToList();
     <p style="margin-top:12px; margin-bottom:5px;">
-        <strong>Datos de @($"{tabla.Esquema}.{tabla.Nombre}") en 1FN (primeros @primerosDiez.Count registro(s)):</strong>
+        <strong>Datos de @($"{tabla.Esquema}.{tabla.Nombre}") (primeros @primerosDiez.Count registro(s)):</strong>
     </p>
     <div class="tabla-contenedor">
         <table class="tabla">
@@ -57,7 +74,13 @@
                 <tr>
                     @foreach (var c in tabla.Columnas)
                     {
-                        <th>@c.Nombre</th>
+                        var esFk = tabla.ClavesForaneas.Any(f =>
+                            f.Columnas.Any(col => col.Equals(c.Nombre, StringComparison.OrdinalIgnoreCase)));
+                        var etiquetas = new List<string>();
+                        if (c.EsPrimaryKey) etiquetas.Add(esPkCompuesta ? "PK Compuesta" : "PK");
+                        if (esFk) etiquetas.Add("FK");
+                        var sufijo = etiquetas.Count > 0 ? $" ({string.Join(", ", etiquetas)})" : "";
+                        <th>@($"{c.Nombre}{sufijo}")</th>
                     }
                 </tr>
             </thead>

@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using Normalizador.Core.Modelos;
 
 namespace Normalizador.Core.Reglas;
@@ -49,7 +49,7 @@ public class ReglaGruposRepetitivos : IReglaTabla
         var grupos = tabla.Columnas
             .Select(c => (c.Nombre, Coincidencia: Patron.Match(c.Nombre)))
             .Where(x => x.Coincidencia.Success)
-            .GroupBy(x => x.Coincidencia.Groups[1].Value, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(x => x.Coincidencia.Groups[1].Value.TrimEnd('_'), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() >= 2)
             .ToList();
 
@@ -67,27 +67,46 @@ public class ReglaGruposRepetitivos : IReglaTabla
 
 public class ReglaAtomicidad : IReglaTabla
 {
+    private static readonly char[] SeparadoresLista = { ',', ';', '|' };
     private static readonly string[] TiposSospechosos = { "xml", "text", "ntext", "image" };
-    private static readonly string[] PalabrasSospechosas = { "lista", "listado", "varios", "multiple", "csv", "items" };
+    private static readonly string[] PalabrasSospechosas =
+        { "lista", "listado", "varios", "multiple", "csv", "items", "telefonos", "correos", "productoscomprados", "cantidades", "preciosunitarios", "asignaturas", "docentes" };
+    private static readonly string[] ColumnasTextoLibre =
+        { "direccion", "domicilio", "ubicacion", "observacion", "descripcion", "comentario", "detalle_dir" };
 
     public string Nombre => "Valores atómicos (sin multivalores)";
 
     public ResultadoRegla Evaluar(Tabla tabla, IReadOnlyList<Tabla> todas)
     {
-        var sospechosas = tabla.Columnas.Where(c =>
-        {
-            var tipo = c.TipoDato.ToLowerInvariant();
-            var nombre = c.Nombre.ToLowerInvariant();
-            return TiposSospechosos.Contains(tipo)
-                || tipo.Contains("(max)")
-                || PalabrasSospechosas.Any(p => nombre.Contains(p));
-        }).Select(c => $"{c.Nombre} ({c.TipoDato})").ToList();
+        var sospechosas = tabla.Columnas.Where(c => EsSospechosa(tabla, c))
+            .Select(c => $"{c.Nombre} ({c.TipoDato})")
+            .ToList();
 
         if (sospechosas.Count > 0)
             return ResultadoRegla.De(tabla, Nombre, EstadoRegla.Advertencia,
-                $"Columnas que podrían guardar varios valores: {string.Join(", ", sospechosas)}");
+                $"Columnas que contienen o podrían guardar varios valores: {string.Join(", ", sospechosas)}");
 
         return ResultadoRegla.De(tabla, Nombre, EstadoRegla.Cumple, "No se detectaron columnas multivaluadas.");
+    }
+
+    public static bool EsSospechosa(Tabla tabla, Columna c)
+    {
+        var tipo = c.TipoDato.ToLowerInvariant();
+        var nombre = c.Nombre.ToLowerInvariant();
+
+        if (TiposSospechosos.Contains(tipo) || tipo.Contains("(max)"))
+            return true;
+
+        if (PalabrasSospechosas.Any(p => nombre.Contains(p)))
+            return true;
+
+        if (ColumnasTextoLibre.Any(p => nombre.Contains(p)))
+            return false;
+
+        return tabla.Filas.Any(f =>
+            f.TryGetValue(c.Nombre, out var v)
+            && !string.IsNullOrWhiteSpace(v)
+            && v.IndexOfAny(SeparadoresLista) >= 0);
     }
 }
 
@@ -112,8 +131,6 @@ public class ReglaClavesForaneas : IReglaTabla
             $"{tabla.ClavesForaneas.Count} clave(s) foránea(s) correcta(s).");
     }
 
-    // Problemas de una clave foránea concreta (lista vacía = válida).
-    // También la usa el corrector automático para decidir qué claves quitar.
     public static List<string> Validar(Tabla tabla, ClaveForanea fk, IReadOnlyList<Tabla> todas)
     {
         var problemas = new List<string>();

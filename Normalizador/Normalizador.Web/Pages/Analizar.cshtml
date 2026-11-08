@@ -265,23 +265,131 @@
                     }
                 </div>
 
-                <!-- PESTAÑA: Segunda Forma Normal (2FN) -->
-                <div id="tab-2fn" class="seccion pestana-panel">
-                    <h2>6. Segunda Forma Normal (2FN)</h2>
-                    <div class="mensaje">
-                        <strong>Segunda Forma Normal (2FN)</strong><br />
-                        En esta pestaña se verificará que todos los atributos no clave dependan de forma completa de la clave primaria (eliminación de dependencias funcionales parciales).
-                    </div>
-                </div>
+                @if (Model.SegundaFormaNormal != null)
+                {
+                    <!-- PESTAÑA: Segunda Forma Normal (2FN) -->
+                    <div id="tab-2fn" class="seccion pestana-panel">
+                        <h2>6. Segunda Forma Normal (2FN)</h2>
 
-                <!-- PESTAÑA: Tercera Forma Normal (3FN) -->
-                <div id="tab-3fn" class="seccion pestana-panel">
-                    <h2>7. Tercera Forma Normal (3FN)</h2>
-                    <div class="mensaje">
-                        <strong>Tercera Forma Normal (3FN)</strong><br />
-                        En esta pestaña se verificará que no existan dependencias transitivas entre los atributos no clave.
+                        <h3>Diagnóstico inicial de 2FN</h3>
+                        <partial name="_TablaInforme" model="Model.SegundaFormaNormal.EvaluacionesIniciales" />
+
+                        @if (Model.SegundaFormaNormal.CumpleInicialmente)
+                        {
+                            <div class="mensaje ok" style="margin-top:15px;">
+                                Todas las tablas en 1FN cumplen ya con la Segunda Forma Normal (2FN): no existen dependencias funcionales parciales sobre la clave primaria.
+                            </div>
+                        }
+                        else if (Model.SegundaFormaNormal.HuboCambios)
+                        {
+                            <div class="mensaje error" style="margin-top:15px;">
+                                Se detectaron dependencias funcionales parciales sobre claves primarias compuestas. El sistema descompuso las tablas automáticamente para llevarlas a 2FN.
+                            </div>
+
+                            <h3>Transformaciones aplicadas para 2FN</h3>
+                            <div class="tabla-contenedor">
+                                <table class="tabla">
+                                    <thead>
+                                        <tr>
+                                            <th>Tabla</th>
+                                            <th>Regla 2FN</th>
+                                            <th>Transformación realizada</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var cambio in Model.SegundaFormaNormal.Cambios)
+                                        {
+                                            <tr>
+                                                <td>@cambio.Tabla</td>
+                                                <td>@cambio.Regla</td>
+                                                <td>@cambio.Descripcion</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <h3>Tablas en 2FN y sus datos (primeros 10 registros)</h3>
+                        <partial name="_ListadoTablasConDatos" model="Model.SegundaFormaNormal.TablasNormalizadas" />
+
+                        @if (Model.SegundaFormaNormal.HuboCambios)
+                        {
+                            <h3>Informe de 2FN después de la normalización</h3>
+                            <partial name="_TablaInforme" model="Model.SegundaFormaNormal.EvaluacionesFinales" />
+
+                            @if (Model.SegundaFormaNormal.CumpleFinal)
+                            {
+                                <div class="mensaje ok" style="margin-top:15px;">
+                                    Las tablas cumplen ahora con la Segunda Forma Normal (2FN): se puede continuar con la Tercera Forma Normal (3FN).
+                                </div>
+                            }
+                        }
                     </div>
-                </div>
+                }
+
+                @if (Model.TerceraFormaNormal != null)
+                {
+                    <!-- PESTAÑA: Tercera Forma Normal (3FN) -->
+                    <div id="tab-3fn" class="seccion pestana-panel">
+                        <h2>7. Tercera Forma Normal (3FN)</h2>
+
+                        <h3>Diagnóstico inicial de 3FN</h3>
+                        <partial name="_TablaInforme" model="Model.TerceraFormaNormal.EvaluacionesIniciales" />
+
+                        @if (Model.TerceraFormaNormal.CumpleInicialmente)
+                        {
+                            <div class="mensaje ok" style="margin-top:15px;">
+                                Todas las tablas en 2FN cumplen ya con la Tercera Forma Normal (3FN): no existen dependencias funcionales transitivas entre atributos no clave.
+                            </div>
+                        }
+                        else if (Model.TerceraFormaNormal.HuboCambios)
+                        {
+                            <div class="mensaje error" style="margin-top:15px;">
+                                Se detectaron dependencias funcionales transitivas entre atributos no clave. El sistema creó las tablas catálogo correspondientes para llevar el esquema a 3FN.
+                            </div>
+
+                            <h3>Transformaciones aplicadas para 3FN</h3>
+                            <div class="tabla-contenedor">
+                                <table class="tabla">
+                                    <thead>
+                                        <tr>
+                                            <th>Tabla</th>
+                                            <th>Regla 3FN</th>
+                                            <th>Transformación realizada</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var cambio in Model.TerceraFormaNormal.Cambios)
+                                        {
+                                            <tr>
+                                                <td>@cambio.Tabla</td>
+                                                <td>@cambio.Regla</td>
+                                                <td>@cambio.Descripcion</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <h3>Tablas en 3FN y sus datos (primeros 10 registros)</h3>
+                        <partial name="_ListadoTablasConDatos" model="Model.TerceraFormaNormal.TablasNormalizadas" />
+
+                        @if (Model.TerceraFormaNormal.HuboCambios)
+                        {
+                            <h3>Informe de 3FN después de la normalización</h3>
+                            <partial name="_TablaInforme" model="Model.TerceraFormaNormal.EvaluacionesFinales" />
+
+                            @if (Model.TerceraFormaNormal.CumpleFinal)
+                            {
+                                <div class="mensaje ok" style="margin-top:15px;">
+                                    El esquema de base de datos se encuentra completamente normalizado en Tercera Forma Normal (3FN).
+                                </div>
+                            }
+                        }
+                    </div>
+                }
             }
 
             <script>

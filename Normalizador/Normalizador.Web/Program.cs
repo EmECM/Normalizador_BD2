@@ -9,6 +9,8 @@ builder.Services.AddScoped<AnalizadorPrerrequisitos>();
 builder.Services.AddScoped<ServicioConexion>();
 builder.Services.AddScoped<CorrectorPrerrequisitos>();
 builder.Services.AddScoped<Normalizador1FN>();
+builder.Services.AddScoped<Normalizador2FN>();
+builder.Services.AddScoped<Normalizador3FN>();
 
 var app = builder.Build();
 

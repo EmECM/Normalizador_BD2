@@ -9,7 +9,10 @@ public class Normalizador1FN
     private static readonly Regex PatronGrupo = new(@"^(.+?)_?(\d+)$");
     private static readonly char[] SeparadoresMultivalor = { ',', ';', '|' };
     private static readonly string[] TiposNoAtomicos = { "xml", "text", "ntext", "image" };
-    private static readonly string[] PalabrasMultivalor = { "lista", "listado", "varios", "multiple", "csv", "items" };
+    private static readonly string[] PalabrasMultivalor =
+        { "lista", "listado", "varios", "multiple", "csv", "items", "telefonos", "correos", "productoscomprados", "cantidades", "preciosunitarios", "asignaturas", "docentes" };
+    private static readonly string[] ColumnasTextoLibre =
+        { "direccion", "domicilio", "ubicacion", "observacion", "descripcion", "comentario", "detalle_dir" };
 
     private static readonly IReglaTabla ReglaGrupos = new ReglaGruposRepetitivos();
     private static readonly IReglaTabla ReglaAtomico = new ReglaAtomicidad();
@@ -41,7 +44,6 @@ public class Normalizador1FN
         return resultado;
     }
 
-    // En la fase de 1FN, las advertencias de grupos repetitivos y multivalores pasan a ser "NoCumple"
     private static List<ResultadoRegla> Evaluar1FN(IReadOnlyList<Tabla> tablas)
     {
         var lista = new List<ResultadoRegla>();
@@ -68,46 +70,102 @@ public class Normalizador1FN
             .Where(c => !c.EsPrimaryKey)
             .Select(c => (Columna: c, Coincidencia: PatronGrupo.Match(c.Nombre)))
             .Where(x => x.Coincidencia.Success)
-            .GroupBy(x => x.Coincidencia.Groups[1].Value.TrimEnd('_'), StringComparer.OrdinalIgnoreCase)
+            .Select(x => (
+                x.Columna,
+                Prefijo: x.Coincidencia.Groups[1].Value.TrimEnd('_'),
+                Indice: x.Coincidencia.Groups[2].Value))
+            .GroupBy(x => x.Prefijo, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() >= 2)
             .ToList();
 
-        foreach (var grupo in grupos)
+        if (grupos.Count == 0) return;
+
+        // Agrupar los prefijos que comparten los mismos índices numéricos (ej. producto_1..3, cantidad_1..3, precio_1..3)
+        // en una sola tabla detalle con clave compuesta (PK_Padre, PrimerPrefijo) y el resto como atributos no clave.
+        var porIndices = grupos
+            .GroupBy(g => string.Join(",", g.Select(x => x.Indice).OrderBy(i => i)))
+            .ToList();
+
+        foreach (var bloque in porIndices)
         {
-            var columnasGrupo = grupo.Select(x => x.Columna).ToList();
-            var nombresOriginales = string.Join(", ", columnasGrupo.Select(c => c.Nombre));
+            var prefijos = bloque.ToList();
+            var indices = prefijos[0].Select(x => x.Indice).Distinct().ToList();
+            var todasColumnasBloque = prefijos.SelectMany(p => p.Select(x => x.Columna)).ToList();
+            var nombresOriginales = string.Join(", ", todasColumnasBloque.Select(c => c.Nombre));
 
-            var nombreColumnaAtomica = LimpiarNombreAtomico(grupo.Key);
-            var tipoAtomico = ConvertirTipoAtomico(columnasGrupo[0].TipoDato);
-            var (nuevaTabla, mapeoPk, nombreColumnaValor) = CrearTablaHija(
-                tabla, nombreColumnaAtomica, tipoAtomico, nombresTablas);
+            var primerPrefijo = LimpiarNombreAtomico(prefijos[0].Key);
+            var tipoPrimerPrefijo = ConvertirTipoAtomico(prefijos[0].First().Columna.TipoDato);
 
-            // Migrar los datos de cada columna repetitiva hacia filas individuales de la tabla hija
-            foreach (var filaPadre in tabla.Filas)
+            var (nuevaTabla, mapeoPk, colClaveHija) = CrearTablaHija(
+                tabla, primerPrefijo, tipoPrimerPrefijo, nombresTablas);
+
+            var columnasAtributoHija = new List<(string PrefijoOriginal, string NombreColumnaHija)>();
+            columnasAtributoHija.Add((prefijos[0].Key, colClaveHija));
+
+            foreach (var prefijoExtra in prefijos.Skip(1))
             {
-                foreach (var colRep in columnasGrupo)
+                var nombreLimpio = LimpiarNombreAtomico(prefijoExtra.Key);
+                var ocupados = nuevaTabla.Columnas.Select(c => c.Nombre).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var nombreCol = ocupados.Contains(nombreLimpio) ? $"Valor_{nombreLimpio}" : nombreLimpio;
+
+                nuevaTabla.Columnas.Add(new Columna
                 {
-                    if (filaPadre.TryGetValue(colRep.Nombre, out var valor) && !string.IsNullOrWhiteSpace(valor))
-                    {
-                        var filaHija = CrearFilaBaseHija(filaPadre, mapeoPk);
-                        filaHija[nombreColumnaValor] = valor.Trim();
-                        AgregarFilaSiNoDuplicada(nuevaTabla, filaHija);
-                    }
-                    filaPadre.Remove(colRep.Nombre);
-                }
+                    Nombre = nombreCol,
+                    TipoDato = ConvertirTipoAtomico(prefijoExtra.First().Columna.TipoDato),
+                    PermiteNulos = true,
+                    EsPrimaryKey = false,
+                    EsIdentity = false
+                });
+
+                columnasAtributoHija.Add((prefijoExtra.Key, nombreCol));
             }
 
-            foreach (var col in columnasGrupo)
+            // Migrar datos por cada índice (1, 2, 3...)
+            foreach (var filaPadre in tabla.Filas)
+            {
+                foreach (var idx in indices)
+                {
+                    var filaHija = CrearFilaBaseHija(filaPadre, mapeoPk);
+                    var tieneAlgunValor = false;
+
+                    for (int p = 0; p < prefijos.Count; p++)
+                    {
+                        var colOriginal = prefijos[p].FirstOrDefault(x => x.Indice == idx).Columna;
+                        var nombreHija = columnasAtributoHija[p].NombreColumnaHija;
+                        if (colOriginal != null &&
+                            filaPadre.TryGetValue(colOriginal.Nombre, out var v) &&
+                            !string.IsNullOrWhiteSpace(v) &&
+                            !v.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                        {
+                            filaHija[nombreHija] = v.Trim();
+                            if (p == 0) tieneAlgunValor = true;
+                        }
+                        else
+                        {
+                            filaHija[nombreHija] = null;
+                        }
+                    }
+
+                    if (tieneAlgunValor)
+                        AgregarFilaSiNoDuplicada(nuevaTabla, filaHija);
+                }
+
+                foreach (var col in todasColumnasBloque)
+                    filaPadre.Remove(col.Nombre);
+            }
+
+            foreach (var col in todasColumnasBloque)
                 tabla.Columnas.Remove(col);
 
             nuevasTablas.Add(nuevaTabla);
             var pkCompuesta = string.Join(", ", nuevaTabla.ClavePrimaria.Select(c => c.Nombre));
+            var colsHija = string.Join(", ", nuevaTabla.Columnas.Select(c => c.Nombre));
 
             cambios.Add(new CambioAplicado
             {
                 Tabla = tabla.Nombre,
                 Regla = ReglaGrupos.Nombre,
-                Descripcion = $"Se eliminaron las columnas repetitivas ({nombresOriginales}) y se creó la tabla '{nuevaTabla.Nombre}' con clave primaria compuesta ({pkCompuesta}) y clave foránea hacia '{tabla.Nombre}'."
+                Descripcion = $"Se eliminaron las columnas repetitivas ({nombresOriginales}) y se creó la tabla '{nuevaTabla.Nombre}' ({colsHija}) con clave primaria compuesta ({pkCompuesta}) y clave foránea hacia '{tabla.Nombre}'."
             });
         }
     }
@@ -119,67 +177,209 @@ public class Normalizador1FN
         List<CambioAplicado> cambios)
     {
         var noAtomicas = tabla.Columnas
-            .Where(c => !c.EsPrimaryKey && (EsColumnaNoAtomica(c) || TieneDatosMultivalor(tabla, c.Nombre)))
+            .Where(c => !c.EsPrimaryKey && ReglaAtomicidad.EsSospechosa(tabla, c))
             .ToList();
+
+        if (noAtomicas.Count == 0) return;
+
+        var multivalor = new List<Columna>();
+        var soloTipoNoAtomico = new List<Columna>();
 
         foreach (var col in noAtomicas)
         {
             var nombreLower = col.Nombre.ToLowerInvariant();
             var tipoLower = col.TipoDato.ToLowerInvariant();
-            var tieneValoresSeparados = TieneDatosMultivalor(tabla, col.Nombre);
-            var esMultivalor = PalabrasMultivalor.Any(p => nombreLower.Contains(p))
+            if (PalabrasMultivalor.Any(p => nombreLower.Contains(p))
                 || tipoLower == "xml"
-                || tieneValoresSeparados;
-
-            if (esMultivalor)
+                || TieneDatosMultivalor(tabla, col.Nombre))
             {
-                var nombreColumnaAtomica = LimpiarNombreAtomico(col.Nombre);
-                var tipoAtomico = ConvertirTipoAtomico(col.TipoDato);
-                var (nuevaTabla, mapeoPk, nombreColumnaValor) = CrearTablaHija(
-                    tabla, nombreColumnaAtomica, tipoAtomico, nombresTablas);
-
-                // Desglosar los valores separados por coma/punto y coma en registros individuales
-                foreach (var filaPadre in tabla.Filas)
-                {
-                    if (filaPadre.TryGetValue(col.Nombre, out var celda) && !string.IsNullOrWhiteSpace(celda))
-                    {
-                        var partes = celda.Split(SeparadoresMultivalor, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var parte in partes)
-                        {
-                            var limpio = parte.Trim();
-                            if (limpio.Length == 0) continue;
-                            var filaHija = CrearFilaBaseHija(filaPadre, mapeoPk);
-                            filaHija[nombreColumnaValor] = limpio;
-                            AgregarFilaSiNoDuplicada(nuevaTabla, filaHija);
-                        }
-                    }
-                    filaPadre.Remove(col.Nombre);
-                }
-
-                tabla.Columnas.Remove(col);
-                nuevasTablas.Add(nuevaTabla);
-                var pkCompuesta = string.Join(", ", nuevaTabla.ClavePrimaria.Select(c => c.Nombre));
-
-                cambios.Add(new CambioAplicado
-                {
-                    Tabla = tabla.Nombre,
-                    Regla = ReglaAtomico.Nombre,
-                    Descripcion = $"Se extrajo la columna multivaluada '{col.Nombre}' ({col.TipoDato}) a la nueva tabla '{nuevaTabla.Nombre}' con clave primaria compuesta ({pkCompuesta}) y clave foránea hacia '{tabla.Nombre}'."
-                });
+                multivalor.Add(col);
             }
             else
             {
-                var tipoAnterior = col.TipoDato;
-                col.TipoDato = ConvertirTipoAtomico(col.TipoDato);
-
-                cambios.Add(new CambioAplicado
-                {
-                    Tabla = tabla.Nombre,
-                    Regla = ReglaAtomico.Nombre,
-                    Descripcion = $"Se normalizó el tipo de dato de la columna '{col.Nombre}' de '{tipoAnterior}' a '{col.TipoDato}' para garantizar valores atómicos."
-                });
+                soloTipoNoAtomico.Add(col);
             }
         }
+
+        // 1. Separar columnas de contacto independientes (ej. telefonos, correos) de listas paralelas de detalle
+        var contactosIndependientes = multivalor
+            .Where(c => c.Nombre.Contains("tel", StringComparison.OrdinalIgnoreCase)
+                     || c.Nombre.Contains("correo", StringComparison.OrdinalIgnoreCase)
+                     || c.Nombre.Contains("email", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var paralelasCandidatas = multivalor.Except(contactosIndependientes).ToList();
+
+        foreach (var col in contactosIndependientes)
+            ExtraerColumnaMultivalorIndividual(tabla, col, nombresTablas, nuevasTablas, cambios);
+
+        if (paralelasCandidatas.Count >= 2 && SonListasParalelas(tabla, paralelasCandidatas))
+        {
+            ExtraerColumnasMultivalorParalelas(tabla, paralelasCandidatas, nombresTablas, nuevasTablas, cambios);
+        }
+        else
+        {
+            foreach (var col in paralelasCandidatas)
+                ExtraerColumnaMultivalorIndividual(tabla, col, nombresTablas, nuevasTablas, cambios);
+        }
+
+        foreach (var col in soloTipoNoAtomico)
+        {
+            var tipoAnterior = col.TipoDato;
+            col.TipoDato = ConvertirTipoAtomico(col.TipoDato);
+
+            cambios.Add(new CambioAplicado
+            {
+                Tabla = tabla.Nombre,
+                Regla = ReglaAtomico.Nombre,
+                Descripcion = $"Se normalizó el tipo de dato de la columna '{col.Nombre}' de '{tipoAnterior}' a '{col.TipoDato}' para garantizar valores atómicos."
+            });
+        }
+    }
+
+    private static bool SonListasParalelas(Tabla tabla, List<Columna> columnas)
+    {
+        if (tabla.Filas.Count == 0) return true;
+
+        foreach (var fila in tabla.Filas)
+        {
+            var longitudes = columnas
+                .Select(c => fila.TryGetValue(c.Nombre, out var v) && !string.IsNullOrWhiteSpace(v)
+                    ? v.Split(SeparadoresMultivalor, StringSplitOptions.RemoveEmptyEntries).Length
+                    : 0)
+                .Distinct()
+                .ToList();
+
+            if (longitudes.Count > 1)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static void ExtraerColumnasMultivalorParalelas(
+        Tabla tabla,
+        List<Columna> columnas,
+        ISet<string> nombresTablas,
+        List<Tabla> nuevasTablas,
+        List<CambioAplicado> cambios)
+    {
+        var primera = columnas[0];
+        var nombreClaveHija = LimpiarNombreAtomico(primera.Nombre);
+        var tipoClaveHija = InferirTipoElemento(tabla, primera);
+
+        var (nuevaTabla, mapeoPk, colClaveHija) = CrearTablaHija(
+            tabla, nombreClaveHija, tipoClaveHija, nombresTablas);
+
+        var nombresHija = new List<string> { colClaveHija };
+
+        foreach (var colExtra in columnas.Skip(1))
+        {
+            var limpio = LimpiarNombreAtomico(colExtra.Nombre);
+            var ocupados = nuevaTabla.Columnas.Select(c => c.Nombre).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var nombreFinal = ocupados.Contains(limpio) ? $"Valor_{limpio}" : limpio;
+
+            nuevaTabla.Columnas.Add(new Columna
+            {
+                Nombre = nombreFinal,
+                TipoDato = InferirTipoElemento(tabla, colExtra),
+                PermiteNulos = false,
+                EsPrimaryKey = false,
+                EsIdentity = false
+            });
+
+            nombresHija.Add(nombreFinal);
+        }
+
+        foreach (var filaPadre in tabla.Filas)
+        {
+            var listasPorColumna = columnas.Select(c =>
+                filaPadre.TryGetValue(c.Nombre, out var celda) && !string.IsNullOrWhiteSpace(celda)
+                    ? celda.Split(SeparadoresMultivalor, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList()
+                    : new List<string>())
+                .ToList();
+
+            var maxItems = listasPorColumna.Max(l => l.Count);
+            for (int idx = 0; idx < maxItems; idx++)
+            {
+                var filaHija = CrearFilaBaseHija(filaPadre, mapeoPk);
+                for (int c = 0; c < columnas.Count; c++)
+                {
+                    var lista = listasPorColumna[c];
+                    filaHija[nombresHija[c]] = idx < lista.Count ? lista[idx] : null;
+                }
+
+                if (!string.IsNullOrWhiteSpace(filaHija[colClaveHija]))
+                    AgregarFilaSiNoDuplicada(nuevaTabla, filaHija);
+            }
+
+            foreach (var col in columnas)
+                filaPadre.Remove(col.Nombre);
+        }
+
+        foreach (var col in columnas)
+            tabla.Columnas.Remove(col);
+
+        nuevasTablas.Add(nuevaTabla);
+        var nombresOrig = string.Join(", ", columnas.Select(c => c.Nombre));
+        var pkCompuesta = string.Join(", ", nuevaTabla.ClavePrimaria.Select(c => c.Nombre));
+        var colsNuevas = string.Join(", ", nuevaTabla.Columnas.Select(c => c.Nombre));
+
+        cambios.Add(new CambioAplicado
+        {
+            Tabla = tabla.Nombre,
+            Regla = ReglaAtomico.Nombre,
+            Descripcion = $"Se desglosaron las columnas multivaluadas ({nombresOrig}) en la nueva tabla '{nuevaTabla.Nombre}' ({colsNuevas}) con clave primaria compuesta ({pkCompuesta}) y clave foránea hacia '{tabla.Nombre}'."
+        });
+    }
+
+    private static void ExtraerColumnaMultivalorIndividual(
+        Tabla tabla,
+        Columna col,
+        ISet<string> nombresTablas,
+        List<Tabla> nuevasTablas,
+        List<CambioAplicado> cambios)
+    {
+        var nombreColumnaAtomica = LimpiarNombreAtomico(col.Nombre);
+        var tipoAtomico = InferirTipoElemento(tabla, col);
+        var (nuevaTabla, mapeoPk, nombreColumnaValor) = CrearTablaHija(
+            tabla, nombreColumnaAtomica, tipoAtomico, nombresTablas);
+
+        foreach (var filaPadre in tabla.Filas)
+        {
+            if (filaPadre.TryGetValue(col.Nombre, out var celda) && !string.IsNullOrWhiteSpace(celda))
+            {
+                var partes = celda.Split(SeparadoresMultivalor, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var parte in partes)
+                {
+                    var limpio = parte.Trim();
+                    if (limpio.Length == 0) continue;
+                    var filaHija = CrearFilaBaseHija(filaPadre, mapeoPk);
+                    filaHija[nombreColumnaValor] = limpio;
+                    AgregarFilaSiNoDuplicada(nuevaTabla, filaHija);
+                }
+            }
+            filaPadre.Remove(col.Nombre);
+        }
+
+        tabla.Columnas.Remove(col);
+        nuevasTablas.Add(nuevaTabla);
+        var pkCompuesta = string.Join(", ", nuevaTabla.ClavePrimaria.Select(c => c.Nombre));
+
+        cambios.Add(new CambioAplicado
+        {
+            Tabla = tabla.Nombre,
+            Regla = ReglaAtomico.Nombre,
+            Descripcion = $"Se extrajo la columna multivaluada '{col.Nombre}' ({col.TipoDato}) a la nueva tabla '{nuevaTabla.Nombre}' con clave primaria compuesta ({pkCompuesta}) y clave foránea hacia '{tabla.Nombre}'."
+        });
+    }
+
+    private static string InferirTipoElemento(Tabla tabla, Columna col)
+    {
+        var n = col.Nombre.ToLowerInvariant();
+        if (n.Contains("cantidad")) return "INT";
+        if (n.Contains("precio") || n.Contains("costo") || n.Contains("monto")) return "DECIMAL(10, 2)";
+        return ConvertirTipoAtomico(col.TipoDato);
     }
 
     private static (Tabla Hija, List<(string ColPadre, string ColHija)> MapeoPk, string ColumnaValor) CrearTablaHija(
@@ -269,23 +469,17 @@ public class Normalizador1FN
             tabla.Filas.Add(nueva);
     }
 
-    private static bool TieneDatosMultivalor(Tabla tabla, string nombreColumna) =>
-        tabla.Filas.Any(f =>
+    private static bool TieneDatosMultivalor(Tabla tabla, string nombreColumna)
+    {
+        if (ColumnasTextoLibre.Any(p => nombreColumna.Contains(p, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        return tabla.Filas.Any(f =>
             f.TryGetValue(nombreColumna, out var v)
             && !string.IsNullOrWhiteSpace(v)
             && v.IndexOfAny(SeparadoresMultivalor) >= 0);
-
-    private static bool EsColumnaNoAtomica(Columna c)
-    {
-        var tipo = c.TipoDato.ToLowerInvariant();
-        var nombre = c.Nombre.ToLowerInvariant();
-        return TiposNoAtomicos.Contains(tipo)
-            || tipo.Contains("(max)")
-            || PalabrasMultivalor.Any(p => nombre.Contains(p));
     }
 
-    // Si el script solo contenía CREATE TABLE (sin INSERT) y la tabla no existe aún en SQL Server,
-    // genera 10 registros coherentes con las columnas para visualizar las tablas en 1FN con datos.
     private static void AsegurarFilasIniciales(Tabla tabla)
     {
         if (tabla.Filas.Count > 0) return;
@@ -333,10 +527,14 @@ public class Normalizador1FN
         if (n.Contains("nombre")) return $"Nombre {fila}";
         if (n.Contains("nacionalidad") || n.Contains("pais"))
         {
-            string[] paises = { "Honduras", "México", "España", "Colombia", "Argentina", "Chile", "Perú", "Costa Rica", "Guatemala", "Panamá" };
+            string[] paises = { "Honduras", "México", "España", "Honduras", "México" };
             return paises[(fila - 1) % paises.Length];
         }
-        if (n.Contains("institucion") || n.Contains("empresa")) return $"Institución {fila}";
+        if (n.Contains("institucion") || n.Contains("empresa"))
+        {
+            string[] inst = { "UNAH", "CEUTEC", "UNAM", "UNAH", "CEUTEC" };
+            return inst[(fila - 1) % inst.Length];
+        }
         if (n.Contains("correo") || n.Contains("email")) return $"usuario{fila}@correo.com";
         if (n.Contains("tel")) return $"9900-00{fila:00}";
 
@@ -346,7 +544,15 @@ public class Normalizador1FN
     private static string LimpiarNombreAtomico(string nombre)
     {
         var limpio = PatronGrupo.Replace(nombre, "$1");
-        foreach (var palabra in PalabrasMultivalor.OrderByDescending(p => p.Length))
+        if (limpio.Equals("ProductosComprados", StringComparison.OrdinalIgnoreCase)) return "Producto";
+        if (limpio.Equals("PreciosUnitarios", StringComparison.OrdinalIgnoreCase)) return "Precio_Unitario";
+        if (limpio.Equals("Cantidades", StringComparison.OrdinalIgnoreCase)) return "Cantidad";
+        if (limpio.Equals("AsignaturasMatriculadas", StringComparison.OrdinalIgnoreCase)) return "Asignatura";
+        if (limpio.Equals("DocentesAsignados", StringComparison.OrdinalIgnoreCase)) return "Docente";
+        if (limpio.Equals("TelefonoCliente", StringComparison.OrdinalIgnoreCase) ||
+            limpio.Equals("cliente_telefonos", StringComparison.OrdinalIgnoreCase)) return "Telefono";
+
+        foreach (var palabra in new[] { "lista", "listado", "varios", "multiple", "csv", "items" })
             limpio = Regex.Replace(limpio, palabra, "", RegexOptions.IgnoreCase);
 
         limpio = Regex.Replace(limpio, @"_+_+", "_").Trim('_', ' ');

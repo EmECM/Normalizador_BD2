@@ -11,6 +11,8 @@ public class AnalizarModel : PageModel
     private readonly ServicioConexion _conexion;
     private readonly CorrectorPrerrequisitos _corrector;
     private readonly Normalizador1FN _normalizador1FN;
+    private readonly Normalizador2FN _normalizador2FN;
+    private readonly Normalizador3FN _normalizador3FN;
     private readonly IConfiguration _config;
 
     public AnalizarModel(
@@ -18,12 +20,16 @@ public class AnalizarModel : PageModel
         ServicioConexion conexion,
         CorrectorPrerrequisitos corrector,
         Normalizador1FN normalizador1FN,
+        Normalizador2FN normalizador2FN,
+        Normalizador3FN normalizador3FN,
         IConfiguration config)
     {
         _analizador = analizador;
         _conexion = conexion;
         _corrector = corrector;
         _normalizador1FN = normalizador1FN;
+        _normalizador2FN = normalizador2FN;
+        _normalizador3FN = normalizador3FN;
         _config = config;
     }
 
@@ -33,6 +39,8 @@ public class AnalizarModel : PageModel
     public ResultadoAnalisis? Resultado { get; set; }
     public ResultadoCorreccion? Correccion { get; set; }
     public Resultado1FN? PrimeraFormaNormal { get; set; }
+    public ResultadoFormaNormal? SegundaFormaNormal { get; set; }
+    public ResultadoFormaNormal? TerceraFormaNormal { get; set; }
     public string? MensajeError { get; set; }
     public bool ConexionOk { get; set; }
     public string EstadoConexion { get; set; } = "";
@@ -67,13 +75,16 @@ public class AnalizarModel : PageModel
         if (Resultado.ScriptValido && Resultado.Resultados.Any(r => r.Estado == EstadoRegla.NoCumple))
             Correccion = _corrector.Corregir(script);
 
-        // Fase 1FN: toma las tablas válidas (originales o ya corregidas en prerrequisitos)
+        // Encadenamiento de fases: Prerrequisitos -> 1FN -> 2FN -> 3FN
         var analisisBase = Correccion?.AnalisisCorregido ?? Resultado;
         if (analisisBase.PuedeContinuar)
         {
             var cadena = _config.GetConnectionString("SqlServer") ?? "";
             _conexion.CargarFilasSiExisten(cadena, analisisBase.Tablas);
+
             PrimeraFormaNormal = _normalizador1FN.Normalizar(analisisBase.Tablas);
+            SegundaFormaNormal = _normalizador2FN.Normalizar(PrimeraFormaNormal.Tablas1FN);
+            TerceraFormaNormal = _normalizador3FN.Normalizar(SegundaFormaNormal.TablasNormalizadas);
         }
     }
 
