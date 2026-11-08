@@ -172,6 +172,64 @@ body {
     margin-bottom: 10px;
 }
 
+
+/* Navegación por pestañas para cada fase de normalización */
+.pestanas-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 0;
+    border-bottom: 3px solid #173f70;
+    padding-bottom: 0;
+}
+
+.pestana-btn {
+    background-color: #dbe4ee;
+    color: #173f70;
+    border: 1px solid #c2d1e0;
+    border-bottom: none;
+    padding: 11px 18px;
+    font-size: 15px;
+    font-weight: bold;
+    border-radius: 5px 5px 0 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.pestana-btn:hover {
+    background-color: #c8d6e5;
+}
+
+.pestana-btn.activa {
+    background-color: #173f70;
+    color: #ffffff;
+    border-color: #173f70;
+}
+
+.pestana-panel {
+    display: none;
+    border-top-left-radius: 0;
+}
+
+.pestana-panel.activa {
+    display: block;
+}
+
+.boton-secundario {
+    background-color: #173f70;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 12px;
+    font-weight: bold;
+}
+
+.boton-secundario:hover {
+    background-color: #102d52;
+}
+
 /* Envoltura para que las tablas anchas se desplacen sin romper la página */
 .tabla-contenedor {
     overflow-x: auto;

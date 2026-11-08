@@ -8,6 +8,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddScoped<AnalizadorPrerrequisitos>();
 builder.Services.AddScoped<ServicioConexion>();
 builder.Services.AddScoped<CorrectorPrerrequisitos>();
+builder.Services.AddScoped<Normalizador1FN>();
 
 var app = builder.Build();
 

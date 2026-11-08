@@ -84,15 +84,37 @@
                 </div>
             </div>
 
-            <!-- 3. Tablas originales -->
-            <div class="seccion">
+            <!-- Barra de pestañas por fase -->
+            <div class="pestanas-nav">
+                <button type="button" class="pestana-btn activa" onclick="mostrarPestana('tab-originales', this)">
+                    3. Tablas Originales
+                </button>
+                <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-prerrequisitos', this)">
+                    4. Prerrequisitos @(Model.Correccion != null ? "(Corregidos)" : "")
+                </button>
+                @if (Model.PrimeraFormaNormal != null)
+                {
+                    <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-1fn', this)">
+                        5. Primera Forma Normal (1FN)
+                    </button>
+                    <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-2fn', this)">
+                        6. Segunda Forma Normal (2FN)
+                    </button>
+                    <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-3fn', this)">
+                        7. Tercera Forma Normal (3FN)
+                    </button>
+                }
+            </div>
+
+            <!-- PESTAÑA: Tablas originales -->
+            <div id="tab-originales" class="seccion pestana-panel activa">
                 <h2>3. Tablas originales</h2>
 
                 <partial name="_ListadoTablas" model="Model.Resultado.Tablas" />
             </div>
 
-            <!-- 4. Informe de prerrequisitos -->
-            <div class="seccion">
+            <!-- PESTAÑA: Prerrequisitos y corrección automática -->
+            <div id="tab-prerrequisitos" class="seccion pestana-panel">
                 <h2>4. Informe de prerrequisitos</h2>
 
                 <partial name="_TablaInforme" model="Model.Resultado.Resultados" />
@@ -106,7 +128,7 @@
                 else if (Model.Correccion != null)
                 {
                     <div class="mensaje error" style="margin-top:15px;">
-                        Hay prerrequisitos que no se cumplen. El sistema corrigió el script automáticamente: revisa la sección 5.
+                        Hay prerrequisitos que no se cumplen en las tablas originales. Más abajo se muestra la corrección automática aplicada.
                     </div>
                 }
                 else
@@ -115,18 +137,16 @@
                         Hay prerrequisitos que no se cumplen: corrige las filas en rojo antes de continuar.
                     </div>
                 }
-            </div>
 
-            if (Model.Correccion != null)
-            {
-                <!-- 5. Corrección automática de prerrequisitos -->
-                <div class="seccion">
-                    <h2>5. Corrección automática de prerrequisitos</h2>
+                @if (Model.Correccion != null)
+                {
+                    <hr style="margin: 25px 0;" />
+                    <h2>Corrección automática de prerrequisitos</h2>
 
                     @if (Model.Correccion.HuboCambios)
                     {
                         <div class="mensaje ok">
-                            Se aplicaron @Model.Correccion.Cambios.Count modificación(es) al script para que cumpla los prerrequisitos.
+                            Se aplicaron @Model.Correccion.Cambios.Count modificación(es) para que las tablas cumplan los prerrequisitos.
                         </div>
 
                         <h3>Cambios realizados</h3>
@@ -163,7 +183,7 @@
                             if (Model.Correccion.AnalisisCorregido.PuedeContinuar)
                             {
                                 <div class="mensaje ok" style="margin-top:15px;">
-                                    Las tablas corregidas cumplen los prerrequisitos: se puede continuar con la revisión de formas normales.
+                                    Las tablas corregidas cumplen los prerrequisitos: puedes pasar a la pestaña de Primera Forma Normal (1FN).
                                 </div>
                             }
                             else
@@ -180,29 +200,110 @@
                             No se encontró una corrección automática para los prerrequisitos que fallan.
                         </div>
                     }
+                }
+            </div>
+
+            @if (Model.PrimeraFormaNormal != null)
+            {
+                <!-- PESTAÑA: Primera Forma Normal (1FN) -->
+                <div id="tab-1fn" class="seccion pestana-panel">
+                    <h2>5. Primera Forma Normal (1FN)</h2>
+
+                    <h3>Diagnóstico inicial de 1FN</h3>
+                    <partial name="_TablaInforme" model="Model.PrimeraFormaNormal.EvaluacionesIniciales" />
+
+                    @if (Model.PrimeraFormaNormal.CumpleInicialmente)
+                    {
+                        <div class="mensaje ok" style="margin-top:15px;">
+                            Todas las tablas cumplen ya con la Primera Forma Normal (1FN): sus atributos son atómicos y no tienen grupos repetitivos.
+                        </div>
+                    }
+                    else if (Model.PrimeraFormaNormal.HuboCambios)
+                    {
+                        <div class="mensaje error" style="margin-top:15px;">
+                            Se detectaron violaciones a la Primera Forma Normal (1FN). El sistema descompuso y normalizó las tablas automáticamente.
+                        </div>
+
+                        <h3>Transformaciones aplicadas para 1FN</h3>
+                        <div class="tabla-contenedor">
+                            <table class="tabla">
+                                <thead>
+                                    <tr>
+                                        <th>Tabla</th>
+                                        <th>Regla 1FN</th>
+                                        <th>Transformación realizada</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var cambio in Model.PrimeraFormaNormal.Cambios)
+                                    {
+                                        <tr>
+                                            <td>@cambio.Tabla</td>
+                                            <td>@cambio.Regla</td>
+                                            <td>@cambio.Descripcion</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    <h3>Tablas en 1FN y sus datos (primeros 10 registros)</h3>
+                    <partial name="_ListadoTablasConDatos" model="Model.PrimeraFormaNormal.Tablas1FN" />
+
+                    @if (Model.PrimeraFormaNormal.HuboCambios)
+                    {
+                        <h3>Informe de 1FN después de la normalización</h3>
+                        <partial name="_TablaInforme" model="Model.PrimeraFormaNormal.EvaluacionesFinales" />
+
+                        @if (Model.PrimeraFormaNormal.Cumple1FN)
+                        {
+                            <div class="mensaje ok" style="margin-top:15px;">
+                                Las tablas cumplen ahora con la Primera Forma Normal (1FN): se puede continuar con la Segunda Forma Normal (2FN).
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- PESTAÑA: Segunda Forma Normal (2FN) -->
+                <div id="tab-2fn" class="seccion pestana-panel">
+                    <h2>6. Segunda Forma Normal (2FN)</h2>
+                    <div class="mensaje">
+                        <strong>Segunda Forma Normal (2FN)</strong><br />
+                        En esta pestaña se verificará que todos los atributos no clave dependan de forma completa de la clave primaria (eliminación de dependencias funcionales parciales).
+                    </div>
+                </div>
+
+                <!-- PESTAÑA: Tercera Forma Normal (3FN) -->
+                <div id="tab-3fn" class="seccion pestana-panel">
+                    <h2>7. Tercera Forma Normal (3FN)</h2>
+                    <div class="mensaje">
+                        <strong>Tercera Forma Normal (3FN)</strong><br />
+                        En esta pestaña se verificará que no existan dependencias transitivas entre los atributos no clave.
+                    </div>
                 </div>
             }
 
-            <!-- 6. Análisis de normalización (pendiente de conectar con la lógica de 1FN, 2FN y 3FN) -->
-            <div class="seccion">
-                <h2>6. Análisis de normalización</h2>
-
-                <div class="mensaje">
-                    <strong>Primera Forma Normal (1FN)</strong><br />
-                    Se deben verificar los valores atómicos de las columnas.<br /><br />
-                    <strong>Segunda Forma Normal (2FN)</strong><br />
-                    Se deben verificar las dependencias completas de las claves.<br /><br />
-                    <strong>Tercera Forma Normal (3FN)</strong><br />
-                    Se deben verificar las dependencias transitivas.<br /><br />
-                    <strong>Nota:</strong> Para certificar las formas normales es necesario analizar
-                    también las dependencias funcionales y los datos.
-                </div>
-            </div>
+            <script>
+                function mostrarPestana(idPanel, boton) {
+                    var paneles = document.querySelectorAll('.pestana-panel');
+                    for (var i = 0; i < paneles.length; i++) {
+                        paneles[i].classList.remove('activa');
+                    }
+                    var botones = document.querySelectorAll('.pestana-btn');
+                    for (var j = 0; j < botones.length; j++) {
+                        botones[j].classList.remove('activa');
+                    }
+                    var destino = document.getElementById(idPanel);
+                    if (destino) destino.classList.add('activa');
+                    if (boton) boton.classList.add('activa');
+                }
+            </script>
         }
     }
 
     <div class="pie">
-    Administración de Base de Datos II
+        Administración de Base de Datos II
     </div>
 
 </div>

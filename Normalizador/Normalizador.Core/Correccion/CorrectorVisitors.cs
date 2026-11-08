@@ -5,7 +5,7 @@ using Normalizador.Core.Reglas;
 
 namespace Normalizador.Core.Correccion;
 
-// Base común: recuerda qué sentencias están al nivel del lote (las únicas que se pueden eliminar sin dejar
+// Base comun: recuerda que sentencias están al nivel del lote (las únicas que se pueden eliminar sin dejar
 // código inválido) y cuenta las modificaciones hechas.
 internal abstract class CorrectorVisitorBase : TSqlFragmentVisitor
 {

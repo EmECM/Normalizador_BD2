@@ -1,12 +1,15 @@
-﻿using Microsoft.SqlServer.TransactSql.ScriptDom;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Normalizador.Core.Modelos;
 
 namespace Normalizador.Core.Lectura;
 
 internal class EstructuraVisitor : TSqlFragmentVisitor
 {
+    private const int MaxFilasPorTabla = 50;
+
     public List<Tabla> Tablas { get; } = new();
     private readonly List<AlterTableAddTableElementStatement> _alters = new();
+    private readonly List<InsertStatement> _inserts = new();
 
     public override void ExplicitVisit(CreateTableStatement nodo)
     {
@@ -41,6 +44,11 @@ internal class EstructuraVisitor : TSqlFragmentVisitor
         _alters.Add(nodo);
     }
 
+    public override void ExplicitVisit(InsertStatement nodo)
+    {
+        _inserts.Add(nodo);
+    }
+
     // Se llama al final, cuando ya se leyeron todas las tablas
     public void AplicarAlters()
     {
@@ -53,7 +61,73 @@ internal class EstructuraVisitor : TSqlFragmentVisitor
             foreach (var restriccion in alter.Definition.TableConstraints)
                 AplicarRestriccion(tabla, null, restriccion);
         }
+
+        AplicarInserts();
     }
+
+    private void AplicarInserts()
+    {
+        foreach (var insert in _inserts)
+        {
+            var spec = insert.InsertSpecification;
+            if (spec?.Target is not NamedTableReference destino) continue;
+            if (spec.InsertSource is not ValuesInsertSource fuente) continue;
+
+            var nombreTabla = destino.SchemaObject.BaseIdentifier.Value;
+            var tabla = Tablas.FirstOrDefault(t => t.Nombre.Equals(nombreTabla, StringComparison.OrdinalIgnoreCase));
+            if (tabla == null || tabla.Filas.Count >= MaxFilasPorTabla) continue;
+
+            var columnasExplicitas = spec.Columns
+                .Select(c => c.MultiPartIdentifier.Identifiers.Last().Value)
+                .ToList();
+
+            foreach (var row in fuente.RowValues)
+            {
+                if (tabla.Filas.Count >= MaxFilasPorTabla) break;
+
+                var nombresDestino = ObtenerColumnasInsert(tabla, columnasExplicitas, row.ColumnValues.Count);
+                var fila = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+                for (int i = 0; i < row.ColumnValues.Count && i < nombresDestino.Count; i++)
+                    fila[nombresDestino[i]] = ExtraerValor(row.ColumnValues[i]);
+
+                var numeroFila = (tabla.Filas.Count + 1).ToString();
+                foreach (var col in tabla.Columnas.Where(c => c.EsIdentity || c.EsPrimaryKey))
+                {
+                    if (!fila.ContainsKey(col.Nombre) || string.IsNullOrWhiteSpace(fila[col.Nombre]))
+                        fila[col.Nombre] = numeroFila;
+                }
+
+                tabla.Filas.Add(fila);
+            }
+        }
+    }
+
+    private static List<string> ObtenerColumnasInsert(
+        Tabla tabla,
+        List<string> explicitas,
+        int cantidadValores)
+    {
+        if (explicitas.Count > 0) return explicitas;
+
+        var sinIdentity = tabla.Columnas.Where(c => !c.EsIdentity).Select(c => c.Nombre).ToList();
+        if (cantidadValores == sinIdentity.Count)
+            return sinIdentity;
+
+        return tabla.Columnas.Select(c => c.Nombre).ToList();
+    }
+
+    private static string? ExtraerValor(ScalarExpression expr) => expr switch
+    {
+        NullLiteral => null,
+        StringLiteral s => s.Value,
+        IntegerLiteral i => i.Value,
+        NumericLiteral n => n.Value,
+        RealLiteral r => r.Value,
+        MoneyLiteral m => m.Value,
+        UnaryExpression u => Texto(u).Trim(),
+        _ => Texto(expr).Trim()
+    };
 
     private static void AplicarRestriccion(Tabla tabla, Columna? col, ConstraintDefinition restriccion)
     {

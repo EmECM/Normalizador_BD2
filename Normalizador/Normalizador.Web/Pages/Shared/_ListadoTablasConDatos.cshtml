@@ -1,0 +1,78 @@
+@using Normalizador.Core.Modelos
+@model IEnumerable<Tabla>
+
+@foreach (var tabla in Model)
+{
+    <h3>@($"{tabla.Esquema}.{tabla.Nombre}")</h3>
+
+    <div class="tabla-contenedor">
+        <table class="tabla">
+            <thead>
+                <tr>
+                    <th>Columna</th>
+                    <th>Tipo</th>
+                    <th>PK</th>
+                    <th>Único</th>
+                    <th>Acepta nulos</th>
+                    <th>Identity</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in tabla.Columnas)
+                {
+                    <tr>
+                        <td>@c.Nombre</td>
+                        <td>@c.TipoDato</td>
+                        <td>@(c.EsPrimaryKey ? "Sí" : "")</td>
+                        <td>@(c.EsUnica ? "Sí" : "")</td>
+                        <td>@(c.PermiteNulos ? "Sí" : "No")</td>
+                        <td>@(c.EsIdentity ? "Sí" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <p>
+        <strong>Clave primaria:</strong>
+        @string.Join(", ", tabla.ClavePrimaria.Select(c => c.Nombre))
+    </p>
+
+    @if (tabla.ClavesForaneas.Count > 0)
+    {
+        <p>
+            <strong>Claves foráneas:</strong>
+            @string.Join("; ", tabla.ClavesForaneas.Select(fk =>
+                $"({string.Join(", ", fk.Columnas)}) → {fk.TablaReferenciada}({string.Join(", ", fk.ColumnasReferenciadas)})"))
+        </p>
+    }
+
+    var primerosDiez = tabla.Filas.Take(10).ToList();
+    <p style="margin-top:12px; margin-bottom:5px;">
+        <strong>Datos de @($"{tabla.Esquema}.{tabla.Nombre}") en 1FN (primeros @primerosDiez.Count registro(s)):</strong>
+    </p>
+    <div class="tabla-contenedor">
+        <table class="tabla">
+            <thead>
+                <tr>
+                    @foreach (var c in tabla.Columnas)
+                    {
+                        <th>@c.Nombre</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var fila in primerosDiez)
+                {
+                    <tr>
+                        @foreach (var c in tabla.Columnas)
+                        {
+                            var valor = fila.TryGetValue(c.Nombre, out var v) && v != null ? v : "NULL";
+                            <td>@valor</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
