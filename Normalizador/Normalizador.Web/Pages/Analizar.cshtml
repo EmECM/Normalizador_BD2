@@ -103,6 +103,12 @@
                     <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-3fn', this)">
                         7. Tercera Forma Normal (3FN)
                     </button>
+                    @if (Model.TerceraFormaNormal != null)
+                    {
+                        <button type="button" class="pestana-btn" onclick="mostrarPestana('tab-er', this)">
+                            8. Diagrama E-R
+                        </button>
+                    }
                 }
             </div>
 
@@ -251,6 +257,9 @@
                     <h3>Tablas en 1FN y sus datos (primeros 10 registros)</h3>
                     <partial name="_ListadoTablasConDatos" model="Model.PrimeraFormaNormal.Tablas1FN" />
 
+                    <h3>Script SQL de 1FN</h3>
+                    <partial name="_ScriptOculto" model="Model.PrimeraFormaNormal.Tablas1FN" view-data='new ViewDataDictionary(ViewData) { { "Id", "1fn" } }' />
+
                     @if (Model.PrimeraFormaNormal.HuboCambios)
                     {
                         <h3>Informe de 1FN después de la normalización</h3>
@@ -312,6 +321,9 @@
 
                         <h3>Tablas en 2FN y sus datos (primeros 10 registros)</h3>
                         <partial name="_ListadoTablasConDatos" model="Model.SegundaFormaNormal.TablasNormalizadas" />
+
+                        <h3>Script SQL de 2FN</h3>
+                        <partial name="_ScriptOculto" model="Model.SegundaFormaNormal.TablasNormalizadas" view-data='new ViewDataDictionary(ViewData) { { "Id", "2fn" } }' />
 
                         @if (Model.SegundaFormaNormal.HuboCambios)
                         {
@@ -376,6 +388,9 @@
                         <h3>Tablas en 3FN y sus datos (primeros 10 registros)</h3>
                         <partial name="_ListadoTablasConDatos" model="Model.TerceraFormaNormal.TablasNormalizadas" />
 
+                        <h3>Script SQL de 3FN</h3>
+                        <partial name="_ScriptOculto" model="Model.TerceraFormaNormal.TablasNormalizadas" view-data='new ViewDataDictionary(ViewData) { { "Id", "3fn" } }' />
+
                         @if (Model.TerceraFormaNormal.HuboCambios)
                         {
                             <h3>Informe de 3FN después de la normalización</h3>
@@ -388,6 +403,12 @@
                                 </div>
                             }
                         }
+                    </div>
+
+                    <!-- PESTAÑA: Diagrama entidad-relación -->
+                    <div id="tab-er" class="seccion pestana-panel">
+                        <h2>8. Diagrama Entidad-Relación (esquema en 3FN)</h2>
+                        <partial name="_DiagramaER" model="Model.TerceraFormaNormal.TablasNormalizadas" />
                     </div>
                 }
             }
@@ -405,6 +426,27 @@
                     var destino = document.getElementById(idPanel);
                     if (destino) destino.classList.add('activa');
                     if (boton) boton.classList.add('activa');
+                }
+
+                function alternarScript(id, boton) {
+                    var caja = document.getElementById('script-' + id);
+                    var visible = caja.style.display !== 'none';
+                    caja.style.display = visible ? 'none' : 'block';
+                    boton.textContent = visible ? 'Mostrar script SQL' : 'Ocultar script SQL';
+                }
+
+                function copiarScript(id) {
+                    var area = document.getElementById('texto-' + id);
+                    area.select();
+                    navigator.clipboard.writeText(area.value);
+                }
+
+                function descargarScript(id) {
+                    var texto = document.getElementById('texto-' + id).value;
+                    var enlace = document.createElement('a');
+                    enlace.href = URL.createObjectURL(new Blob([texto], { type: 'text/plain' }));
+                    enlace.download = 'script_' + id + '.sql';
+                    enlace.click();
                 }
             </script>
         }

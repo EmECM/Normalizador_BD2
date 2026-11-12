@@ -1,0 +1,11 @@
+@using Normalizador.Core.Modelos
+@model IEnumerable<Tabla>
+
+<div class="tabla-contenedor" style="overflow:auto; background:#fafafa; padding:10px;">
+    @Html.Raw(Normalizador.Core.Servicios.GeneradorDiagramaER.Generar(Model.ToList()))
+</div>
+<p style="margin-top:8px;">
+    <strong>Leyenda:</strong> cada caja es una tabla; <span style="color:#c62828">PK</span> = clave primaria,
+    <span style="color:#c62828">FK</span> = clave foránea. En cada línea, <strong>1</strong> está del lado de la tabla referenciada
+    y <strong>N</strong> del lado de la tabla que contiene la clave foránea.
+</p>

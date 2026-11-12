@@ -1,0 +1,17 @@
+@using Normalizador.Core.Modelos
+@model IEnumerable<Tabla>
+@{
+    var id = ViewData["Id"]?.ToString() ?? "script";
+    var script = Normalizador.Core.Servicios.GeneradorScript.Generar(Model.ToList());
+}
+
+<div class="script-oculto" style="margin-top:20px;">
+    <button type="button" class="boton" onclick="alternarScript('@id', this)">Mostrar script SQL</button>
+
+    <div id="script-@id" style="display:none; margin-top:10px;">
+        <button type="button" class="boton" onclick="copiarScript('@id')">Copiar script</button>
+        <button type="button" class="boton" onclick="descargarScript('@id')">Descargar .sql</button>
+        <textarea id="texto-@id" readonly rows="18"
+                  style="width:100%; margin-top:10px; font-family:Consolas,monospace; font-size:13px;">@script</textarea>
+    </div>
+</div>
